@@ -31,7 +31,7 @@
    (let loop ()
      (define next-byte (read-bytes 1 in))
      (cond [(equal? next-byte #"\x00") #""]
-           [(eof-object? next-byte) (error "fuck")]
+           [(eof-object? next-byte) (raise (make-exn:bson "unexpected eof"))]
            [else (bytes-append next-byte
                                (loop))]))))
 
