@@ -1,8 +1,13 @@
 #lang racket
 (require srfi/1)
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; DECODE
+
 (define (read-document in)
-  (define document-length (- (read-int32 in) 5)) ; not including the int32 or the terminal byte
+  (define document-length (- (read-int32 in)
+                             5)) ; not including the four int32 bytes or the
+                                 ; terminal byte
   (define document-byte-string  (read-bytes document-length in))
   (begin0 (read-element-list (open-input-bytes document-byte-string))
     (read-null-byte in)))
@@ -129,3 +134,45 @@
          [#x12 read-int64]
          [#xFF read-minkey]
          [#x7F read-maxkey]))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; ENCODE
+
+(define (encode-document document)
+  (define e-list-byte-string (encode-e-list document))
+  (bytes-append (integer->integer-bytes
+                 (+ (bytes-length e-list-byte-string)
+                    4  ;; for the leading int32
+                    1) ;; for the terminal byte
+                 4 
+                 1 
+                 #f)
+                e-list-byte-string
+                #"\x00"))
+
+(define (encode-e-list e-list)
+  (foldl (lambda (element encoding)
+           (bytes-append encoding
+                        (encode-element element)))
+         #""
+         e-list))
+
+(define (encode-element element)
+  (cond [(pair? element)
+         (let ([e-name (bytes-append (string->bytes/utf-8 (car element))
+                                     #"\x00")])
+           (cond [(string? (cdr element))
+                  (let ([encoded-string (encode-string (cdr element))])
+                    (bytes-append #"\x02"
+                                  e-name
+                                  encoded-string))]))]))
+
+(define (encode-string str)
+  (let ([encoded-string (string->bytes/utf-8 str)])
+    (bytes-append (integer->integer-bytes (add1 ;; for the terminal byte
+                                           (bytes-length encoded-string))
+                                          4 
+                                          1 
+                                          #f)
+                  encoded-string
+                  #"\x00")))
